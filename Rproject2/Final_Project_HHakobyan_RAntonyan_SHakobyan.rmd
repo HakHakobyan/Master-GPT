@@ -1,0 +1,443 @@
+---
+title: "US Elections 2020"
+author: "Hakob Hakobyan, Rafayel Antonyan, Sargis Hakobyan"
+date: "2022-12-23"
+output: html_document
+---
+
+### *Part1*
+
+## Creating a dataset using BBC playlist data
+For our project we have chosen a BBC playlist representing US president elections news in 2020.
+
+### Activation of libraries
+
+```{r message=FALSE, warning=FALSE}
+library(httr)
+library(jsonlite)
+library(here)
+library(tidyverse)
+library(stringr)
+library(tidytext)
+
+```
+
+### Scrapping snippets and content deteils
+
+```{r message=FALSE, warning=FALSE}
+key <- "AIzaSyBbspEjtv2ZXSXUR60ADZmSXEJJWxzwkAs"
+playlist_id<-"PLS3XGZxi7cBVLrHAQVzG0MPSY_W3Hiwm0"
+base <- "https://www.googleapis.com/youtube/v3/"
+
+nextPageToken <- ""
+upload.df <- NULL
+pageInfo <- NULL
+
+while (!is.null(nextPageToken)) {
+
+  api_params <- 
+    paste(paste0("key=", key), 
+          paste0("playlistId=", playlist_id), 
+          "part=snippet,contentDetails,status",
+          "maxResults=50",
+          sep = "&")
+  
+  if (nextPageToken != "") {
+    api_params <- paste0(api_params,
+                         "&pageToken=",nextPageToken)
+  }
+  
+  api_call <- paste0(base, "playlistItems", "?", api_params)
+  api_result <- GET(api_call)
+  json_result <- content(api_result, "text", encoding="UTF-8")
+  upload.json <- fromJSON(json_result, flatten = T)
+  
+  nextPageToken <- upload.json$nextPageToken
+  pageInfo <- upload.json$pageInfo
+  
+  curr.df <- as.data.frame(upload.json$items)
+  if (is.null(upload.df)) {
+    upload.df <- curr.df
+  } else {
+    upload.df <- bind_rows(upload.df, curr.df)
+  }
+}
+
+```
+
+### Scrapping video statistics
+
+```{r message=FALSE, warning=FALSE}
+
+video.df<- NULL
+for (i in 1:nrow(upload.df)) {
+
+  video_id <- upload.df$contentDetails.videoId[i]
+  api_params <- 
+    paste(paste0("key=", key), 
+          paste0("id=", video_id), 
+          "part=id,statistics,contentDetails",
+          sep = "&")
+  
+  api_call <- paste0(base, "videos", "?", api_params)
+  api_result <- GET(api_call)
+  json_result <- content(api_result, "text", encoding="UTF-8")
+  video.json <- fromJSON(json_result, flatten = T)
+  
+  curr.df <- as.data.frame(video.json$items)
+  
+  if (is.null(video.df)) {
+    video.df <- curr.df
+  } else {
+    video.df <- bind_rows(video.df, curr.df)
+  }
+}  
+```
+
+### Removing duplicates and unavailable videos 
+
+```{r message=FALSE, warning=FALSE}
+
+upload.df<-upload.df[!is.na(upload.df$snippet.thumbnails.default.url),]
+upload.df<-upload.df %>% distinct(contentDetails.videoId, .keep_all = TRUE)
+video.df<-video.df %>% distinct(id, .keep_all = TRUE)
+```
+
+### Merging the two datasets
+
+```{r message=FALSE, warning=FALSE}
+video_final.df <- merge(x = upload.df, 
+                        y = video.df,
+                        by.x = "contentDetails.videoId",
+                        by.y = "id",
+                        all.x = FALSE,
+                        all.y = TRUE)
+video_final.tb<-tibble(video_final.df)
+```
+
+### Text mining
+
+```{r message=FALSE, warning=FALSE}
+video_final.tb <- video_final.tb %>%
+  unnest_tokens(word, snippet.description) %>%
+  select(contentDetails.videoId, snippet.publishedAt, snippet.title, word,
+         contentDetails.duration, contentDetails.caption,
+         statistics.viewCount, statistics.likeCount, statistics.commentCount)
+```
+
+### Sentiment and informative analysis of each document 
+
+```{r message=FALSE, warning=FALSE}
+video_last <- video_final.tb %>%
+  count(snippet.title, word) %>%
+  filter(!str_detect(word, "\\d+")) %>%
+  anti_join(stop_words, by = "word")
+
+
+getafinn<- video_last%>% 
+  inner_join(get_sentiments("afinn"), by = "word")%>%
+  group_by(snippet.title) %>%
+  summarize(afinn.value = sum(n * abs(value)))
+
+getbing<-video_last%>%
+  inner_join(get_sentiments("bing"),by="word")%>%
+  mutate(value = recode(sentiment, negative=-1,positive=1))%>%
+  group_by(snippet.title) %>%
+  summarize(bing.value = sum(n * abs(value)))
+
+gettf_idf <-  video_last%>%count(snippet.title, word)%>%
+  bind_tf_idf(word,snippet.title,n) %>%
+  group_by(snippet.title) %>%
+  summarize(tf=mean(tf),idf=mean(idf),tf_idf=mean(tf_idf))
+```
+
+### Merging datasets
+
+```{r message=FALSE, warning=FALSE}
+db <- merge(x = getafinn, 
+                        y = gettf_idf,
+                        by.x = "snippet.title",
+                        by.y = "snippet.title",
+                        all.x = FALSE,
+                        all.y = TRUE)
+
+db<- merge(x = getbing, 
+                        y = db,
+                        by.x = "snippet.title",
+                        by.y = "snippet.title",
+                        all.x = FALSE,
+                        all.y = TRUE)
+
+db<- merge(x = video_final.df, 
+                        y = db,
+                        by.x = "snippet.title",
+                        by.y = "snippet.title",
+                        all.x = FALSE,
+                        all.y = TRUE)
+
+db<- db%>%
+  select(Title=snippet.title, Views=statistics.viewCount,Likes=statistics.likeCount, 
+        Comments=statistics.commentCount, tf, idf, tf_idf, bing.value, afinn.value)
+```
+
+### Creating new metrics
+
+We create a new estimator **af.bi.value** (the sum of afinn and bing values) which may represent the **sentiment** of each document better. <br>
+
+```{r message=FALSE, warning=FALSE}
+db<- db %>% 
+  replace_na(list(bing.value = 0, afinn.value = 0)) %>% 
+  mutate(af.bi.value = bing.value + afinn.value)
+```
+
+
+Creating another statistic metric **Engagement** which is the sum of likes and comments of a video, and **Eng.view** which is the relation of Engagement and Views.
+
+```{r message=FALSE, warning=FALSE}
+db$Views<- as.numeric(db$Views)
+db$Likes<- as.numeric(db$Likes)
+db$Comments<- as.numeric(db$Comments)
+
+db<- db %>%
+  mutate(Engagement = Likes + Comments)
+
+db<- db%>%
+  mutate(Eng.view = Engagement/Views)
+
+```
+
+### Saving our dataset
+
+```{r message=FALSE, warning=FALSE}
+write.csv(db, file = "db.csv", row.names = FALSE)
+```
+
+
+### *Part 2*
+
+```{r}
+load("C:/Users/rafoa/Desktop/Final/db.RData")
+```
+
+
+## Simple Linear Regression
+
+```{r}
+reg1<-lm(Eng.view ~ tf_idf, data=db)
+summary(reg1)
+
+reg2<-lm(Eng.view ~ af.bi.value, data=db)
+summary(reg2)
+
+reg3<-lm(Eng.view ~ afinn.value, data=db)
+summary(reg3)
+
+reg4<-lm(Eng.view ~ bing.value, data=db)
+summary(reg4)
+
+ggplot(tibble(db))+geom_point(aes(x = bing.value,y=Eng.view, ))+
+  geom_smooth(aes(x = bing.value, y=Eng.view ), method="lm", se=FALSE)
+
+```
+
+#### Comments based on statical results
+
+As R-squared value for Reg4 is the highest we comment only Reg4 model results.
+
+* The coefficient of slope is 0.0007157, which means an increase in bing value by 1 unit increase Eng.views by 0.0007157 on average.
+* The coefficient of slope is significant and has a p-value very close to 0, so is the significance of the intercept coefficient.
+* As R-squared value for Reg4 is 0.09747 closer to 0, this model is not so good, which means that variation of a dependent variable is poorly explained by the independent variable in a regression. But it is still better then the rest 3 models. 
+
+## Multiple Linear Regression
+
+```{r}
+mlreg1<-lm(Eng.view ~ tf_idf+afinn.value+bing.value, data=db)
+summary(mlreg1)
+
+mlreg2<-lm(Eng.view ~ tf_idf+bing.value, data=db)
+summary(mlreg2)
+
+mlreg3<-lm(Eng.view ~ tf_idf+af.bi.value, data=db)
+summary(mlreg3)
+
+```
+
+#### Comments
+
+Doing Backward selection and comparison between the Adjusted R-squared values of 3 models we have found out that mlreg2 is the best one. So we only comment the results of mlreg2.
+
+* The coefficient of tf_idf is 0.0659443 and the one of bing.value is 0.0010568, which means that if we leave bing.value unchanged and increase tf_idf by one unit Eng.views will increase by 0.66.
+* Using Backward selection we have removed afinn.value from our model, so now we have got only tf_idf and bing.value with a very high significance level, which means our independent variables explain the dependent variable quite well.
+* Adjusted R-squared for lmreg2 is 0.1746, which is the highest compared to the other two models.
+* P-value of F-statistics is very low too close to 0 which means the predictive power of all independent variables is high.
+
+## Binary Logistic Regression
+
+Let’s define a new dummy variable “Interest” that will express the interest of viewers based on “likes” and “comment” measures. It will have two values: 1 for videos with high interest from viewers, and 0 for videos with low interest from viewers. The variable Interest can be constructed in a different way. Here we construct it based on a visual analysis of the “likes/view” and “comment/ view” scatter plot and heuristic thresholds.
+
+```{r}
+ggplot(tibble(db))+geom_point(aes(x = Likes/Views,y=Comments/Views))+
+  geom_segment(aes(x = 0.01, y = 0, xend = 0.01, yend = 0.007), color ="red", linewidth =1.5)+
+  geom_segment(aes(x = 0, y = 0.007, xend = 0.01, yend = 0.007), color ="red", linewidth =1.5)
+```
+
+We construct “interest” variable by following expression:
+
+```{r}
+db<- db%>%mutate(interest = case_when( Likes/Views>=0.01 & Comments/Views>=0.007 ~ 1,
+                                             TRUE ~0))
+ggplot(tibble(db))+geom_point(aes(x = Likes/Views,y=interest))
+```
+
+Now, if we want to use the dummy variable “interest” as a dependent we must turn to general linear models, particularly to the logistic model. For general linear models in R we use glm function.
+
+The smaller AIC is the better is the model.
+
+```{r}
+logM1<-glm(interest ~ tf_idf + afinn.value + bing.value, data = db, family = "binomial")
+summary(logM1)
+
+logM2<-glm(interest ~ tf_idf + bing.value, data = db, family = "binomial")
+summary(logM2)
+```
+
+As we can see from the results AIC of model 2 is smaller, so logM2 is the better model in this case.
+
+We can express each of the coefficients as an odds ratio:
+
+```{r}
+exp(coef(logM2))
+```
+So we conclude that tf_idf value which represents the informativeness of a video has the most influence on the interest of a video.
+
+
+## Pseudo R square measures
+
+While no exact equivalent to the R2 of linear regression exists, the McFadden R2 index can be used to assess the model fit.
+
+```{r message=FALSE, warning=FALSE}
+library(pscl)
+pR2(logM1)
+pR2(logM2)
+```
+The higher pseudo R-squared indicates which model better predicts the outcome. Although we can see pseudo-r2 of logM1 is slightly higher than that of logM2, we still choose logM2 to logM1 based on their AICs.
+
+## Accuracy calculation
+
+We will be splitting the data into the test and train using the createDataPartition() function from the caret package in R. We will train the model using the training dataset and predict the values on the test dataset. To train the logistic model, we will be using glm() function.
+
+```{r message=FALSE, warning=FALSE}
+# Loading caret library
+library(caret)
+# Splitting the data into train and test
+set.seed(777)
+index <- createDataPartition(db$interest, p = .70, list = FALSE)
+train <- db[index, ]
+test <- db[-index, ]
+
+# Training the model
+logM2train<-glm(interest ~ tf_idf + bing.value, data = train, family = "binomial")
+summary(logM2train)
+
+# Predicting in the test dataset
+pred_prob <- predict(logM2train, test, type = "response")
+```
+
+Before we create a contingency table, we need to convert the probability into the two levels of interest: 0 and 1. To get these values, we will be using a simple ifelse() function and will create a new variable in the train data by the name pred_interest.
+
+#### Converting probability to interest values in the training dataset
+
+```{r}
+# Converting from probability to actual output
+train$pred_interest <- ifelse(logM2train$fitted.values >= 0.3, 1, 0)
+
+# Generating the classification table
+ctab_train <- table(train$interest, train$pred_interest)
+ctab_train
+```
+
+#### Training dataset converting from probability to interest values
+
+```{r}
+# Converting from probability to actual output
+test$pred_interest <- ifelse(pred_prob >= 0.3, 1, 0)
+
+# Generating the classification table
+ctab_test <- table(test$interest, test$pred_interest)
+ctab_test
+```
+This is the confusion matrix of our model.
+
+#### Train and Test Accuracy
+
+```{r}
+# Accuracy in Training dataset
+accuracy_train <- sum(diag(ctab_train))/sum(ctab_train)*100
+accuracy_train
+
+# Accuracy in Test dataset
+accuracy_test <- sum(diag(ctab_test))/sum(ctab_test)*100
+accuracy_test
+```
+
+
+A model is considered fairly good if the model *accuracy is greater than 70%.*
+
+The over all correct classification accuracy in test dataset is **75%** so our prediction model is good.
+
+### Creating confusion matrix using other method
+
+```{r}
+test$pred_interest<-as_factor(test$pred_interest)
+test$interest<-as_factor(test$interest)
+confMx <- confusionMatrix(data=test$pred_interest, reference = test$interest)
+confMx
+```
+
+## ROC Curve
+
+The area under the curve(AUC) is the measure that represents ROC(Receiver Operating Characteristic) curve. This ROC curve is a line plot that is drawn between the Sensitivity and (1 – Specificity) Or between TPR and TNR. This graph is then used to generate the AUC value. An AUC value of greater than .70 indicates a good model.
+
+```{r message=FALSE, warning=FALSE}
+library(pROC)
+roc <- roc(train$interest, logM2train$fitted.values)
+auc(roc)
+
+plot(roc ,main ="ROC curve -- Logistic Regression ")
+```
+
+As the AUC value (Area under the curve) we got is 0.70, we can conclude that we have a good model.
+
+## Decission trees
+
+### Building the model
+
+```{r message=FALSE, warning=FALSE}
+library(rpart)
+library(rpart.plot)
+dtModel <- rpart(interest~ tf_idf + bing.value, data = train, method = 'class')
+rpart.plot(dtModel, extra = 106)
+```
+
+### Making a Prediction
+
+```{r}
+predicted <-predict(dtModel, test, type = 'class')
+
+table_mat <- table(test$interest, predicted)
+table_mat
+```
+### Measuring Performance
+
+```{r}
+accuracy_Test <- sum(diag(table_mat)) / sum(table_mat)*100
+print(paste('Accuracy for test', accuracy_Test))
+```
+## Conclusion
+
+During this project we have built **Simple** and **Multiple Linear Regression** models, used **Binary Logistic Regression** and **Decision Trees** for interpreting behavior of the auditorium of BBC playlist called *US president elections* .
+
+The accuracy of our **Decision tree model** is **65.9%**, and the accuracy of our **Logistic regression model** is **75%**. So if we compare these results of the latter we will see that the accuracy of the decision tree model is lower, which means that logistic regression model delivers better results, thus it is more preferable in this case.
+
+In conclusion we can claim that the auditorium of the BBC playlist called "US Elections 2020" loves the videos, where  sentimental words are being being used more. However, it is more important to mention the fact that auditorium praizes more the videos, which are more informative, than the ones that are more sentimental sentimental.
+
