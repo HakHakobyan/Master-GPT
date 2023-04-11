@@ -1,0 +1,56 @@
+In order to evaluate the effectiveness of the health education seminars and videos for high school students the
+ sample of schools from Yerevan and other urban areas is created.
+The final sample unit of the study is a student from high school. 
+Survey with the school students will be carried out using experimental design, in particular, randomized controlled trial (RCT):
+the schools will be randomly assigned to control and treatment groups with the purpose of measuring the net impact of the seminars
+ on students’ knowledge and attitudes through structured questionnaires. 
+
+Description of intervention:  Two types of treatment will be tested during evaluation program:
+i)	one group exposed to the seminars only
+ii)	one to the seminars plus the existing videos
+
+Variables:
+ID
+Treatment type [Control, Treatment 1 , Treatment 2]
+Survey Date Pre - The date of the first survey (before treatment)
+Survey Date Post - The date of the second survey (after treatment)
+Income - income level of family of respondent {$}
+Spendings - expenditure of family of respondent {$}
+Answers - number of correct answers (out of 20)
+
+Survey:
+
+P1. Please mention your gender
+1.	Female
+2.	Male
+
+P2. Please write your date of birth   ____day _____month____year
+
+
+P3. Please write your grade of math for the semester 1 of 2018/2019 school year in 10-point system (period of September- December 2018)_____
+98. Prefer not to respond
+       99. Do not know
+
+P4. Please write your overall performance for the semester 1 of 2018/2019 school year (period of September- December 2018) using the following scale
+
+1.	Excellent-  semester grades for all subjects are 8,9 or 10 
+2.	Satisfactory –  there are 6-7 grades for some subjects, but there are no subject semester grade of which is less than 6
+3.	Fair – there are subjects the semester grade of which was 4-5  
+98. Prefer not to respond
+99. Do not know
+
+P5. What is the level of education of your mother?
+1.	Secondary school (1-10 years)
+2.	Vocational
+3.	Higher education 
+98. Prefer not to respond
+99. Do not know
+
+P7. How many people currently live in your home (including yourself)______ people 
+98. Prefer not to respond
+99. Do not know
+
+P9. How many computers (including desktop, laptops and tablets)  are there in your apartment/house? ____________ computers 
+98. Prefer not to respond
+99. Do not know
+
