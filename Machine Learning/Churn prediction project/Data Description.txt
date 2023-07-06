@@ -1,0 +1,27 @@
+The overview
+
+An online sales company wants to predict if the user will come back to its website after 10 days based on the actions done within the first 3 days after registration. The model will be used in several marketing campaigns.
+
+Description of the dataset:
+Each row represents a user who registered and did some actions.
+
+Target: 
+came_back: 0 - user didn’t come back after 10 days, 1 - came back.
+
+Features: 
+n_visits - number of visits of the website during the first 3 days.
+n_actions - number of actions/button clicks in the website during the first 3 days.
+unique_actions - number of unique actions in the website during the first 3 days.
+products_tried - number of products viewed during the first 3 days.
+products_added - number of products added to cart during the first 3 days.
+unique_products_category_tried - number of unique products’ categories viewed during the first 3 days.
+Unique_products_category_added - number of unique products’ categories added to cart during the first 3 days.
+saved_to_cart - if the user actually saved the purchases for later purchase during the first 3 days.
+comments_writen - how many unique comments the user did during the first 3 days.
+counts_of_buys - how many times the user actually paid during the first 3 days.
+
+Applied Models:
+●	KNN
+●	Decision Trees
+●	Regressions
+●	Bayesyan inference
