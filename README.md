@@ -10,15 +10,17 @@ Skills
 
 Here are some of the skills and tools I have experience with:
 
-Python | Core, NumPy, Pandas, Matplotlib
-R | R Studio, R Markdown (intermediate)
-Java | Core
-SQL | PostgreSQL
-MS Office (proficient) | Word, Excel, PowerPoint
-Power BI (intermediate)
-Financial analytical and research skills
-Artificial intelligence and machine learning techniques
-Chat GPT
+• Python |NumPy, Pandas, Matplotlib, Seaborn, Scikit-learn, PyTorch
+• Integration of Chat GPT and other AI APIs
+• R |R Studio, R Markdown, Shiny
+• MS Office (proficient) |Word, Excel, PowerPoint
+• Power BI (intermediate)
+• SQL | PostgreSQL
+• Java |core
+• Analytical and research skills
+• Graphic design skills |Adobe Photoshop (proficient)
+• Digital marketing skills |Content writing, strategic planning, targeting, advertising
+• Digital marketing tools (advanced) |Meta Business Suit, Ads Manager, Manychat
 
 Contact
 
