@@ -1,0 +1,1 @@
+This project uses Microsoft's official sample dataset, AdventureWorks, which includes order, customer, reseller, and product tables. I think it is a very representative example of using BI software to analyze sales data and discover business insights.
